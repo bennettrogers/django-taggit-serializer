@@ -7,29 +7,6 @@ from django.utils.translation import ugettext_lazy as _
 from rest_framework import serializers
 
 
-class TagList(list):
-    def __init__(self, *args, **kwargs):
-        pretty_print = kwargs.pop("pretty_print", True)
-        list.__init__(self, *args, **kwargs)
-        self.pretty_print = pretty_print
-
-    def __add__(self, rhs):
-        return TagList(list.__add__(self, rhs))
-
-    def __getitem__(self, item):
-        result = list.__getitem__(self, item)
-        try:
-            return TagList(result)
-        except TypeError:
-            return result
-
-    def __str__(self):
-        if self.pretty_print:
-            return json.dumps(self, sort_keys=True, indent=4, separators=(",", ": "))
-        else:
-            return json.dumps(self)
-
-
 class TagListSerializerField(serializers.Field):
     #  child = serializers.CharField()
     default_error_messages = {
@@ -78,14 +55,12 @@ class TagListSerializerField(serializers.Field):
 
     def to_representation(self, value):
         # "value" here is assumed to be an instance of _TaggableManager, which is why it has an ".all()" method
-        if not isinstance(value, TagList):
-            if not isinstance(value, list):
-                if self.order_by:
-                    tags = value.all().order_by(*self.order_by)
-                else:
-                    tags = value.all()
-                value = [tag.name for tag in tags]
-            value = TagList(value, pretty_print=self.pretty_print)
+        if not isinstance(value, list):
+            if self.order_by:
+                tags = value.all().order_by(*self.order_by)
+            else:
+                tags = value.all()
+            value = [tag.name for tag in tags]
 
         return value
 
