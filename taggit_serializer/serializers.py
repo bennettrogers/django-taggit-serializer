@@ -31,14 +31,14 @@ class TagList(list):
 
 
 class TagListSerializerField(serializers.Field):
-    child = serializers.CharField()
+    #  child = serializers.CharField()
     default_error_messages = {
         "not_a_list": _('Expected a list of items but got type "{input_type}".'),
         "invalid_json": _(
             "Invalid json list. A tag list submitted in string"
             " form must be valid json."
         ),
-        "not_a_str": _("All list items must be of string type."),
+        "invalid_type": _("All list items must be of type str or dict."),
     }
     order_by = None
 
@@ -54,6 +54,7 @@ class TagListSerializerField(serializers.Field):
         self.pretty_print = pretty_print
 
     def to_internal_value(self, value):
+        # If value is None or a string, parse it into a json dict
         if isinstance(value, six.string_types):
             if not value:
                 value = "[]"
@@ -62,18 +63,21 @@ class TagListSerializerField(serializers.Field):
             except ValueError:
                 self.fail("invalid_json")
 
+        # If value is not a list, make it one
         if not isinstance(value, list):
-            self.fail("not_a_list", input_type=type(value).__name__)
+            value = [value]
 
+        # Items in the list must either be strings or dicts
         for s in value:
-            if not isinstance(s, six.string_types):
-                self.fail("not_a_str")
+            if not isinstance(s, six.string_types) and not isinstance(s, dict):
+                self.fail("invalid_type")
 
-            self.child.run_validation(s)
+            #  self.child.run_validation(s)
 
         return value
 
     def to_representation(self, value):
+        # "value" here is assumed to be an instance of _TaggableManager, which is why it has an ".all()" method
         if not isinstance(value, TagList):
             if not isinstance(value, list):
                 if self.order_by:
@@ -104,7 +108,36 @@ class TaggitSerializer(serializers.Serializer):
     def _save_tags(self, tag_object, tags):
         for key in tags.keys():
             tag_values = tags.get(key)
-            getattr(tag_object, key).set(*tag_values)
+
+            taggable_manager = getattr(tag_object, key)
+
+            # New tags can either be strings or tag model instances
+            new_tags = []
+            tag_dict_ids = []
+            for tag in tag_values:
+                if isinstance(tag, six.string_types):
+                    new_tags.append(tag)
+                elif isinstance(tag, dict):
+                    try:
+                        tag_dict_ids.append(tag["id"])
+                    except KeyError:
+                        raise serializers.ValidationError(
+                            "Tag instance dicts must have an id."
+                        )
+                else:
+                    raise serializers.ValidationError(
+                        "All tags must either be strings or dicts"
+                    )
+
+            # Get the tag objects
+            # Use the appropriate tag model. This method is used in the taggit source:
+            # https://github.com/alex/django-taggit/blob/0.23.0/taggit/managers.py#L152
+            TagModel = taggable_manager.through.tag_model()
+            tag_dict_objs = TagModel.objects.filter(id__in=tag_dict_ids)
+            new_tags = new_tags + list(tag_dict_objs)
+
+            # TaggableManager.set expects args to be strings or Tag Model instances
+            taggable_manager.set(*new_tags)
 
         return tag_object
 
