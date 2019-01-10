@@ -26,9 +26,12 @@ class TagListSerializerField(serializers.Field):
         kwargs["style"] = {"base_template": "textarea.html"}
         kwargs["style"].update(style)
 
+        TagSerializer = kwargs.pop("serializer", None)
+
         super(TagListSerializerField, self).__init__(**kwargs)
 
         self.pretty_print = pretty_print
+        self.TagSerializer = TagSerializer
 
     def to_internal_value(self, value):
         # If value is None or a string, parse it into a json dict
@@ -60,7 +63,11 @@ class TagListSerializerField(serializers.Field):
                 tags = value.all().order_by(*self.order_by)
             else:
                 tags = value.all()
-            value = [tag.name for tag in tags]
+            # If a serializer was specified, use it to return the representation. Otherwise just return the tag name
+            if self.TagSerializer:
+                value = [self.TagSerializer(tag).data for tag in tags]
+            else:
+                value = [tag.name for tag in tags]
 
         return value
 
