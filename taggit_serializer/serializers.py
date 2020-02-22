@@ -21,6 +21,7 @@ class TagListSerializerField(serializers.Field):
 
     def __init__(self, **kwargs):
         pretty_print = kwargs.pop("pretty_print", True)
+        serialize_slugs = kwargs.pop("slugs", False)
 
         style = kwargs.pop("style", {})
         kwargs["style"] = {"base_template": "textarea.html"}
@@ -31,6 +32,7 @@ class TagListSerializerField(serializers.Field):
         super(TagListSerializerField, self).__init__(**kwargs)
 
         self.pretty_print = pretty_print
+        self.serialize_slugs = serialize_slugs
         self.TagSerializer = TagSerializer
 
     def to_internal_value(self, value):
@@ -67,7 +69,7 @@ class TagListSerializerField(serializers.Field):
             if self.TagSerializer:
                 value = [self.TagSerializer(tag).data for tag in tags]
             else:
-                value = [tag.name for tag in tags]
+                value = [tag.slug if self.serialize_slugs else tag.name for tag in tags]
 
         return value
 
