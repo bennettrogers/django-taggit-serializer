@@ -36,14 +36,24 @@ class TagListSerializerField(serializers.Field):
         self.TagSerializer = TagSerializer
 
     def to_internal_value(self, value):
-        # If value is None or a string, parse it into a json dict
+        # Incoming value can be an empty string, a single string, a list of strings, a dict, or a list of dicts
+        # In either case, convert it to a list first
+
         if isinstance(value, six.string_types):
+            # If empty string, set value to empty list string
             if not value:
                 value = "[]"
+
+            # If the incoming value is a stringified dict or stringified list of dicts,
+            # convert it to a dict or list of dicts.
+            # Do not fail in case the incoming value is just a single string.
+            # Note: this means that we will not detect the case where the string was supposed to
+            # be a stringified dict but it is malformed. There isn't a way to determine whether a string
+            # is a simple string (e.g. a slug) or a malformed JSON string.
             try:
                 value = json.loads(value)
             except ValueError:
-                self.fail("invalid_json")
+                pass
 
         # If value is not a list, make it one
         if not isinstance(value, list):
