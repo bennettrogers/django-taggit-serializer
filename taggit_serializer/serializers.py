@@ -105,15 +105,17 @@ class TaggitSerializer(serializers.Serializer):
 
             taggable_manager = getattr(tag_object, key)
 
-            # New tags can either be strings or tag model instances
-            new_tags = []
-            tag_dict_ids = []
+            # Tags can either be strings or tag model instances
+            # If they are strings we assume they are the tag slug
+            # TODO: If a tag with that slug does not exist, raise an exception?
+            tag_ids = []
+            tag_slugs = []
             for tag in tag_values:
                 if isinstance(tag, six.string_types):
-                    new_tags.append(tag)
+                    tag_slugs.append(tag)
                 elif isinstance(tag, dict):
                     try:
-                        tag_dict_ids.append(tag["id"])
+                        tag_ids.append(tag["id"])
                     except KeyError:
                         raise serializers.ValidationError(
                             "Tag instance dicts must have an id."
@@ -123,12 +125,13 @@ class TaggitSerializer(serializers.Serializer):
                         "All tags must either be strings or dicts"
                     )
 
-            # Get the tag objects
+            # Get the existing tag objects
             # Use the appropriate tag model. This method is used in the taggit source:
             # https://github.com/alex/django-taggit/blob/0.23.0/taggit/managers.py#L152
             TagModel = taggable_manager.through.tag_model()
-            tag_dict_objs = TagModel.objects.filter(id__in=tag_dict_ids)
-            new_tags = new_tags + list(tag_dict_objs)
+            tag_id_objs = TagModel.objects.filter(id__in=tag_ids)
+            tag_slug_objs = TagModel.objects.filter(slug__in=tag_slugs)
+            new_tags = list(tag_id_objs) + list(tag_slug_objs)
 
             # TaggableManager.set expects args to be strings or Tag Model instances
             taggable_manager.set(*new_tags)
